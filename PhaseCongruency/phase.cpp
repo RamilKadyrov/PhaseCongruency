@@ -367,8 +367,7 @@ void PhaseCongruency::suppres(cv::OutputArray _dst)
 
 void PhaseCongruency::calc(cv::InputArray _src, cv::OutputArray _edges, cv::OutputArray _corners, std::vector<cv::Rect> & _feature)
 {
-
-	cv::Mat src = _src.getMat();
+    cv::Mat src = _src.getMat();
 	_edges.create(src.size(), src.type());
 	_corners.create(src.size(), src.type());
 	auto edges = _edges.getMat();
@@ -379,9 +378,8 @@ void PhaseCongruency::calc(cv::InputArray _src, cv::OutputArray _edges, cv::Outp
 	src.convertTo(src64, MAT_TYPE_CNV, 1.0 / 255.0);
 
 	int64 dt = 0;
-	int64 freq = int64(REAL(cv::getTickFrequency() / 1000.0));
+	int64 freq = int64(cv::getTickFrequency() / 1000.0);
 	int64 t = cv::getTickCount();
-
 
 	REAL mt;
     REAL noise;
@@ -395,10 +393,7 @@ void PhaseCongruency::calc(cv::InputArray _src, cv::OutputArray _edges, cv::Outp
     //double ML;
 	cv::Point pMin, pMax;
 
-	
-
-
-	cv::Scalar tau;
+    cv::Scalar tau;
 	REAL totalTau;
 
 	//if (CV_MAT_TYPE(src->type) != CV_8UC1 ||
