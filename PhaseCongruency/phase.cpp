@@ -1,6 +1,6 @@
 
 
-#include "opencv2/core/core.hpp"
+//#include "opencv2/core/core.hpp"
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 //#include <iostream>
@@ -68,8 +68,8 @@ void shiftDFT(cv::InputArray _src, cv::OutputArray _dst)
 //void cvPhaseCongruency(const void* srcarr, void* dstarr)
 
 //#define MAT_TYPE CV_64FC1
-#define MAT_TYPE CV_32FC1
-#define MAT_TYPE_CNV CV_32F
+#define MAT_TYPE CV_64FC1
+#define MAT_TYPE_CNV CV_64F
 #define REAL  double
 
 void PhaseCongruency::line(cv::OutputArray _dst, float angle)
@@ -734,7 +734,7 @@ void PhaseCongruency::calc(cv::InputArray _src, cv::OutputArray _edges, cv::Outp
 						{
 							//есть разноориентированные особенности
 							_feature.push_back(roi_rect);
-							cv::rectangle(edges, cv::Point(col, row), cv::Point(col + cell_size, row + cell_size), 128);
+							//cv::rectangle(edges, cv::Point(col, row), cv::Point(col + cell_size, row + cell_size), 128);
 							flag = true;
 							break;
 						}
