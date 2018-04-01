@@ -137,6 +137,7 @@ void PhaseCongruency::setConst(PhaseCongruencyConst _pcc)
     pcc = _pcc;
 }
 
+//Phase congruency calculation
 void PhaseCongruency::calc(InputArray _src, std::vector<cv::Mat> &_pc)
 {
     Mat src = _src.getMat();
