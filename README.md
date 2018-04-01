@@ -1,29 +1,23 @@
-# README #
+# Phase congruency#
 
-This README would normally document whatever steps are necessary to get your application up and running.
+An implemenation of phase congruency image features detection: edges and corners.
 
-### What is this repository for? ###
+![Example of features detection](/example/1.jpg)
 
-* Quick summary
-* Version
-* [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)
+## To build: ##
 
-### How do I get set up? ###
+### Windows ###
 
-* Summary of set up
-* Configuration
-* Dependencies
-* Database configuration
-* How to run tests
-* Deployment instructions
+Microsoft Visual Studio required.
 
-### Contribution guidelines ###
+### Linux ###
 
-* Writing tests
-* Code review
-* Other guidelines
+    make
 
-### Who do I talk to? ###
+## To use: ##
 
-* Repo owner or admin
-* Other community or team contact
+    testPhase input_file_name.txt output_file_name.svg
+
+for example:
+
+    testPhase resources/1.jpg example/1.jpg
