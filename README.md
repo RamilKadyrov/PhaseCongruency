@@ -1,8 +1,10 @@
-# Phase congruency#
+# Phase congruency #
 
 An implemenation of phase congruency image features detection: edges and corners.
 
-![Example of features detection](/example/1.jpg)
+![Example of features detection](/example/1.png)
+
+![Example of features detection](/example/out.png)
 
 ## To build: ##
 
