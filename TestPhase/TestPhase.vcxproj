@@ -88,12 +88,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\PhaseCongruency\phase.cpp" />
     <ClCompile Include="TestPhase.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="..\PhaseCongruency\phase.h" />
-    <ClInclude Include="Header.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -6,6 +6,9 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PhaseCongruency", "PhaseCongruency\PhaseCongruency.vcxproj", "{593B86D1-3E1D-4042-AF89-3BCD15620F27}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestPhase", "TestPhase\TestPhase.vcxproj", "{520972EB-8374-4921-86EE-E133F0DC602F}"
+	ProjectSection(ProjectDependencies) = postProject
+		{593B86D1-3E1D-4042-AF89-3BCD15620F27} = {593B86D1-3E1D-4042-AF89-3BCD15620F27}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

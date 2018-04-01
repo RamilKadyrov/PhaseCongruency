@@ -1,16 +1,13 @@
 
 
-//#include "opencv2/core/core.hpp"
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
-//#include <iostream>
 
 #include "phase.h"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
 
-//#include "options.h"
 
 #define CV_MINMAX       32
 
@@ -18,23 +15,17 @@ using namespace cv;
 
 // Rearrange the quadrants of Fourier image so that the origin is at
 // the image center
-// src & dst arrays of equal size & type
-
 void shiftDFT(InputArray _src, OutputArray _dst)
 {
-    Mat tmp;
-       
     Mat src = _src.getMat();
-
-    _dst.create(src.size(), src.type());
-
-    auto dst = _dst.getMat();
-
     Size size = src.size();
+
+    _dst.create(size, src.type());
+    auto dst = _dst.getMat();
 
     const int cx = size.width / 2;
     const int cy = size.height / 2; // image center
-    
+
     Mat s1 = src(Rect(0, 0, cx, cy));
     Mat s2 = src(Rect(cx, 0, cx, cy));
     Mat s3 = src(Rect(cx, cy, cx, cy));
@@ -45,6 +36,7 @@ void shiftDFT(InputArray _src, OutputArray _dst)
     Mat d3 = dst(Rect(cx, cy, cx, cy));
     Mat d4 = dst(Rect(0, cy, cx, cy));
 
+    Mat tmp;
     s3.copyTo(tmp);
     s1.copyTo(d3);
     tmp.copyTo(d1);
@@ -59,10 +51,16 @@ void shiftDFT(InputArray _src, OutputArray _dst)
 
 // Making a filter
 // src & dst arrays of equal size & type
-PhaseCongruency::PhaseCongruency(Size _img_size)
+PhaseCongruency::PhaseCongruency(Size _size, size_t _nscale, size_t _norient)
 {
-    const auto dft_M = getOptimalDFTSize(_img_size.height);
-    const auto dft_N = getOptimalDFTSize(_img_size.width);
+    size = _size;
+    nscale = _nscale;
+    norient = _norient;
+
+    filter.resize(nscale * norient);
+
+    const int dft_M = getOptimalDFTSize(_size.height);
+    const int dft_N = getOptimalDFTSize(_size.width);
 
     Mat radius = Mat::zeros(dft_M, dft_N, MAT_TYPE);
     Mat matAr[2];
@@ -70,7 +68,7 @@ PhaseCongruency::PhaseCongruency(Size _img_size)
     matAr[1] = Mat::zeros(dft_M, dft_N, MAT_TYPE);
     Mat lp = Mat::zeros(dft_M, dft_N, MAT_TYPE);
     Mat angular = Mat::zeros(dft_M, dft_N, MAT_TYPE);
-    Mat gabor[nscale];
+    std::vector<Mat> gabor(nscale);
 
     //Matrix values contain *normalised* radius 
     // values ranging from 0 at the centre to 
@@ -91,9 +89,9 @@ PhaseCongruency::PhaseCongruency(Size _img_size)
             radius_row[col] = sqrt(static_cast<double>(m * m + n * n)) * dr;
         }
     }
-    lp = radius * 2.5; 
+    lp = radius * 2.5;
     pow(lp, 20.0, lp);
-    lp += Scalar::all(1.0); 
+    lp += Scalar::all(1.0);
     radius.at<double>(dft_M_2, dft_N_2) = 1.0;
     // The following implements the log-gabor transfer function.
     double mt = 1.0f;
@@ -103,9 +101,9 @@ PhaseCongruency::PhaseCongruency(Size _img_size)
         gabor[scale] = radius * wavelength;
         log(gabor[scale], gabor[scale]);
         pow(gabor[scale], 2.0, gabor[scale]);
-        gabor[scale] *= sigma; 
+        gabor[scale] *= sigma;
         exp(gabor[scale], gabor[scale]);
-        gabor[scale].at<double>(dft_M_2, dft_N_2) = 0.0; 
+        gabor[scale].at<double>(dft_M_2, dft_N_2) = 0.0;
         divide(gabor[scale], lp, gabor[scale]);
         mt = mt * mult;
     }
@@ -132,84 +130,68 @@ PhaseCongruency::PhaseCongruency(Size _img_size)
         for (int scale = 0; scale < nscale; scale++)
         {
             multiply(gabor[scale], angular, matAr[0]); //Product of the two components.
-            merge(matAr, 2, filter[scale][ori]);
+            merge(matAr, 2, filter[nscale * ori + scale]);
         }//scale
     }//orientation
     //Filter ready
 }
 
-void PhaseCongruency::calc(InputArray _src, OutputArray _edges, OutputArray _corners)
+void PhaseCongruency::calc(InputArray _src)
 {
     Mat src = _src.getMat();
-    _edges.create(src.size(), src.type());
-    _corners.create(src.size(), src.type());
-    auto edges = _edges.getMat();
-    auto corners = _corners.getMat();
-    int width = src.size().width, height = src.size().height;
+    
+    CV_Assert(src.size() == size);
+ 
+    const int width = size.width, height = size.height;
 
     Mat src64;
     src.convertTo(src64, MAT_TYPE_CNV, 1.0 / 255.0);
 
-    int64 freq = int64(getTickFrequency() / 1000.0);
-    int64 t = getTickCount();
-    
-    auto dft_M = getOptimalDFTSize(src.rows);
-    auto dft_N = getOptimalDFTSize(src.cols);
+    const int dft_M_r = getOptimalDFTSize(src.rows) - src.rows;
+    const int dft_N_c = getOptimalDFTSize(src.cols) - src.cols;
 
-    cv::Mat pc[norient];
+    pc.resize(norient);
+    std::vector<Mat> eo(nscale);
+    Mat complex[2];
+    Mat sumAn;
+    Mat sumRe;
+    Mat sumIm;
+    Mat maxAn;
+    Mat xEnergy;
+    Mat tmp;
+    Mat tmp1;
+    Mat tmp2;
+    Mat energy = Mat::zeros(size, MAT_TYPE);
 
-    cv::Mat dft_A;
-    cv::Mat complex[2];
-    cv::Mat eo[nscale][norient];
-    cv::Mat sumAn;
-    cv::Mat sumRe;
-    cv::Mat sumIm;
-    cv::Mat maxAn;
-    cv::Mat xEnergy;
-    cv::Mat tmp1;
-    cv::Mat tmp2;
-    cv::Mat tmp3;
-
-    cv::Mat minMoment, maxMoment;
-
-    cv::Mat energy = Mat::zeros(src.size(), MAT_TYPE);
-    cv::Mat covx2 = Mat::zeros(src.size(), MAT_TYPE);
-    cv::Mat covy2 = Mat::zeros(src.size(), MAT_TYPE);
-    cv::Mat covxy = Mat::zeros(src.size(), MAT_TYPE);
-    
     //expand input image to optimal size
     Mat padded;
-    copyMakeBorder(src64, padded, 0, dft_M - src.rows, 0, dft_N - src.cols, BORDER_CONSTANT, Scalar::all(0));
+    copyMakeBorder(src64, padded, 0, dft_M_r, 0, dft_N_c, BORDER_CONSTANT, Scalar::all(0));
     Mat planes[] = { Mat_<double>(padded), Mat::zeros(padded.size(), MAT_TYPE_CNV) };
-    merge(planes, 2, dft_A);         // Add to the expanded another plane with zeros
 
+    Mat dft_A;
+    merge(planes, 2, dft_A);         // Add to the expanded another plane with zeros
     dft(dft_A, dft_A);            // this way the result may fit in the source matrix
 
     shiftDFT(dft_A, dft_A);
-    auto dt = (getTickCount() - t) / freq;
-    //std::cout << "DFT: " << dt << std::endl;
-    t = getTickCount();
-
-    const double angle_const = M_PI / (double)norient;
-
-    for (int o = 0; o < norient; o++)
+    
+    for (unsigned o = 0; o < norient; o++)
     {
         double noise = 0;
-        for (int scale = 0; scale < nscale; scale++)
+        for (unsigned scale = 0; scale < nscale; scale++)
         {
-            mulSpectrums(dft_A, filter[scale][o], tmp3, 0); // Convolution
+            Mat filtered;
+            mulSpectrums(dft_A, filter[nscale * o + scale], filtered, 0); // Convolution
+            dft(filtered, filtered, DFT_INVERSE);
+            filtered(Rect(0, 0, width, height)).copyTo(eo[scale]);
 
-            dft(tmp3, tmp3, DFT_INVERSE);
-            tmp3(Rect(0, 0, width, height)).copyTo(eo[scale][o]);
-
-            split(eo[scale][o], complex);
-
-            magnitude(complex[0], complex[1], tmp1);
+            split(eo[scale], complex);
+            Mat eo_mag;
+            magnitude(complex[0], complex[1], eo_mag);
 
             if (scale == 0)
             {
                 //here to do noise threshold calculation
-                auto tau = mean(tmp1);
+                auto tau = mean(eo_mag);
                 tau.val[0] = tau.val[0] / sqrt(log(4.0));
                 auto mt = 1.0 * pow(mult, nscale);
                 auto totalTau = tau.val[0] * (1.0 - 1.0 / mt) / (1.0 - 1.0 / mult);
@@ -220,8 +202,8 @@ void PhaseCongruency::calc(InputArray _src, OutputArray _edges, OutputArray _cor
                 //complex[0] -= xnoise;
                 //max(complex[0], 0.0, complex[0]);
 
-                tmp1.copyTo(maxAn);
-                tmp1.copyTo(sumAn);
+                eo_mag.copyTo(maxAn);
+                eo_mag.copyTo(sumAn);
                 complex[0].copyTo(sumRe);
                 complex[1].copyTo(sumIm);
             }
@@ -229,13 +211,13 @@ void PhaseCongruency::calc(InputArray _src, OutputArray _edges, OutputArray _cor
             {
                 //complex[0] -= xnoise;
                 //max(complex[0], 0.0, complex[0]);
-                add(sumAn, tmp1, sumAn);
-                max(tmp1, maxAn, maxAn);
+                add(sumAn, eo_mag, sumAn);
+                max(eo_mag, maxAn, maxAn);
                 add(sumRe, complex[0], sumRe);
                 add(sumIm, complex[1], sumIm);
             }
         } // next scale
-        
+
         magnitude(sumRe, sumIm, xEnergy);
         xEnergy += epsilon;
         divide(sumIm, xEnergy, sumIm);
@@ -243,13 +225,13 @@ void PhaseCongruency::calc(InputArray _src, OutputArray _edges, OutputArray _cor
         energy.setTo(0);
         for (int scale = 0; scale < nscale; scale++)
         {
-            split(eo[scale][o], complex);
+            split(eo[scale], complex);
 
             multiply(complex[0], sumIm, tmp1);
             multiply(complex[1], sumRe, tmp2);
 
-            absdiff(tmp1, tmp2, tmp2);
-            subtract(energy, tmp2, energy);
+            absdiff(tmp1, tmp2, tmp);
+            subtract(energy, tmp, energy);
 
             multiply(complex[0], sumRe, complex[0]);
             add(energy, complex[0], energy);
@@ -259,10 +241,8 @@ void PhaseCongruency::calc(InputArray _src, OutputArray _edges, OutputArray _cor
             {
                 energy -= noise / norient;
                 max(energy, 0.0, energy);
-                normalize(energy, tmp1, 0, 1, NORM_MINMAX);
-
-                imshow("energy", tmp1);
-
+                normalize(energy, tmp, 0, 1, NORM_MINMAX);
+                imshow("energy", tmp);
             }*/
         } //next scale
 
@@ -270,70 +250,71 @@ void PhaseCongruency::calc(InputArray _src, OutputArray _edges, OutputArray _cor
         max(energy, 0.0, energy);
         maxAn += epsilon;
 
-        divide(sumAn, maxAn, tmp1, double(1.0 / nscale));
+        divide(sumAn, maxAn, tmp, -1.0 / static_cast<double>(nscale));
 
-        /*if (o == 3)
-        {
-        normalize(sumAn, tmp2, 0, 1, NORM_MINMAX);
-        imshow("sumAn", tmp2);
-        minMaxLoc(maxAn, &ml, &ML);
-        std::cout << "maxAn min " << ml << " max " << ML << std::endl;
-        normalize(maxAn, tmp2, 0, 1, NORM_MINMAX);
-        imshow("maxAn", tmp2);
-        minMaxLoc(tmp1, &ml, &ML);
-        std::cout << "tmp1 min " << ml << " max " << ML << std::endl;
-        max(tmp1, 0.0, tmp1);
-        normalize(tmp1, tmp2, 0, 1, NORM_MINMAX);
-
-        imshow("divider", tmp2);
-        }*/
-
-        tmp1 = tmp1 * double(-1.0);
-        tmp1 += cutOff;   //cvScale(tmp1, tmp1, -g / ((double) nscale), cutOff * g);
-        tmp1 = tmp1 * g;
-        exp(tmp1, tmp1);
-        tmp1 += 1.0; // 1 / weight
+        tmp += cutOff;
+        tmp = tmp * g;
+        exp(tmp, tmp);
+        tmp += 1.0; // 1 / weight
 
         //PC
-        multiply(tmp1, sumAn, tmp1);
-        divide(energy, tmp1, pc[o]);
-        
-        double angl = (double)o * angle_const;
-        double sina = (double)sin(angl);
-        double cosa = (double)cos(angl);
+        multiply(tmp, sumAn, tmp);
+        divide(energy, tmp, pc[o]);
+        if (o == 5)
+        {
+            //imshow("orinetation", pc[o]);
+        }
+    }//orientation
 
-        //Build up covariance data for every point
-        tmp1 = pc[o] * cosa;
-        tmp2 = pc[o] * sina;
-        multiply(tmp1, tmp2, complex[0]);
-        add(covxy, complex[0], covxy);
-        pow(tmp1, 2, tmp1);
-        add(covx2, tmp1, covx2);
-        pow(tmp2, 2, tmp2);
-        add(covy2, tmp2, covy2);
+}
 
-        dt = (getTickCount() - t) / freq;
-        //printf("Calc orient: %d ms\n", dt);
-        t = getTickCount();
-        //if (o == 0)
-        //{
-        //	imshow("orinetation", pc[o]);
-        //}
+//Build up covariance data for every point
+void PhaseCongruency::feature(InputArray _src, cv::OutputArray _edges, cv::OutputArray _corners)
+{
+    
+    calc(_src);
+    
+    _edges.create(size, CV_8UC1);
+    _corners.create(size, CV_8UC1);
+    auto edges = _edges.getMat();
+    auto corners = _corners.getMat();
+    
+    Mat covx2 = Mat::zeros(size, MAT_TYPE);
+    Mat covy2 = Mat::zeros(size, MAT_TYPE);
+    Mat covxy = Mat::zeros(size, MAT_TYPE);
+    Mat cos_pc, sin_pc, mul_pc;
+
+    const double angle_const = M_PI / static_cast<double>(norient);
+
+    for (unsigned o = 0; o < norient; o++)
+    {
+        auto angl = static_cast<double>(o) * angle_const;
+        cos_pc = pc[o] * cos(angl);
+        sin_pc = pc[o] * sin(angl);
+        multiply(cos_pc, sin_pc, mul_pc);
+        add(covxy, mul_pc, covxy);
+        pow(cos_pc, 2, cos_pc);
+        add(covx2, cos_pc, covx2);
+        pow(sin_pc, 2, sin_pc);
+        add(covy2, sin_pc, covy2);
     } // next orientation
 
-    //Edges calculations
+      //Edges calculations
     covx2 *= 2.0 / static_cast<double>(norient);
     covy2 *= 2.0 / static_cast<double>(norient);
     covxy *= 4.0 / static_cast<double>(norient);
+    Mat sub;
+    subtract(covx2, covy2, sub);
 
-    subtract(covx2, covy2, tmp1);
-      
-    //tmp2 += Scalar::all(epsilon);
-    magnitude(tmp1, covxy, tmp2); // denom;
+    //denom += Scalar::all(epsilon);
+    Mat denom;
+    magnitude(sub, covxy, denom); // denom;
+    Mat sum;
+    add(covy2, covx2, sum);
 
-    add(covy2, covx2, tmp1);
-    subtract(tmp1, tmp2, minMoment);//m = (covy2 + covx2 - denom) / 2;          % ... and minimum moment
-    add(tmp1, tmp2, maxMoment); //M = (covy2+covx2 + denom)/2;          % Maximum moment
+    Mat minMoment, maxMoment;
+    subtract(sum, denom, minMoment);//m = (covy2 + covx2 - denom) / 2;          % ... and minimum moment
+    add(sum, denom, maxMoment); //M = (covy2+covx2 + denom)/2;          % Maximum moment
 
     maxMoment.convertTo(edges, CV_8U, 255);
     minMoment.convertTo(corners, CV_8U, 255);
