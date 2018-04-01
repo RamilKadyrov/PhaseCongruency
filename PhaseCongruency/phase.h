@@ -20,7 +20,7 @@ class PhaseCongruency
 public:
 	PhaseCongruency(cv::Size _img_size);
 	~PhaseCongruency() {}
-	void calc(cv::InputArray _src, cv::OutputArray _edges, cv::OutputArray _corners, std::vector<cv::Rect> & _feature);
+	void calc(cv::InputArray _src, cv::OutputArray _edges, cv::OutputArray _corners);
 private:
     const double sigma = -1.0 / (2.0 * log(0.65) * log(0.65));
 

@@ -314,7 +314,7 @@ void PhaseCongruency::suppres(cv::OutputArray _dst)
     }
 }
 
-void PhaseCongruency::calc(cv::InputArray _src, cv::OutputArray _edges, cv::OutputArray _corners, std::vector<cv::Rect> & _feature)
+void PhaseCongruency::calc(cv::InputArray _src, cv::OutputArray _edges, cv::OutputArray _corners)
 {
     cv::Mat src = _src.getMat();
     _edges.create(src.size(), src.type());
@@ -536,153 +536,13 @@ void PhaseCongruency::calc(cv::InputArray _src, cv::OutputArray _edges, cv::Outp
 
     cv::add(covy2, covx2, tmp1);
 
-    //cv::subtract(tmp1, tmp2, minMoment);//m = (covy2 + covx2 - denom) / 2;          % ... and minimum moment
+    cv::subtract(tmp1, tmp2, minMoment);//m = (covy2 + covx2 - denom) / 2;          % ... and minimum moment
 
     cv::add(tmp1, tmp2, maxMoment); //M = (covy2+covx2 + denom)/2;          % Maximum moment
-    //расчет ориентатции в градусах
-    sin2theta = covxy / tmp2;
-    cos2theta = (covx2 - covy2) / tmp2;
-
-    result.create(src.size(), MAT_TYPE);
-    result.setTo(0);
-    orientation.create(src.size(), CV_8U);
-
-    for (int i = 0; i < height; ++i)
-    {
-        auto orow = orientation.ptr<unsigned char>(i);
-        auto srow = sin2theta.ptr<REAL>(i);
-        auto crow = cos2theta.ptr<REAL>(i);
-        for (int j = 0; j < width; ++j)
-        {
-            REAL t = cv::fastAtan2(static_cast<float>(srow[j]), static_cast<float>(crow[j]));
-            if (t >= 180.0)
-            {
-                t -= 180.0;
-                if (t >= 180)
-                {
-                    t = 0;
-                }
-            }
-            orow[j] = (int)t;
-        }
-    }
-    //тонкие линии
-
-    int iradius = static_cast<int>(ceil(thin_radius));
-
-    for (int row = iradius + 1; row < height - iradius; ++row)
-    {
-        auto orow = orientation.ptr<unsigned char>(row);
-        for (int col = iradius + 1; col < width - iradius; ++col)
-        {
-            auto oro = orow[col];
-
-            REAL x = col + xoff(oro);
-            REAL y = row - yoff(oro);
-
-            int fx = static_cast<int>(floor(x));
-            int cx = static_cast<int>(ceil(x));
-            int fy = static_cast<int>(floor(y));
-            int cy = static_cast<int>(ceil(y));
-
-            REAL tl = maxMoment.at<REAL>(fy, fx);
-            REAL tr = maxMoment.at<REAL>(fy, cx);
-            REAL bl = maxMoment.at<REAL>(cy, fx);
-            REAL br = maxMoment.at<REAL>(cy, cx);
-
-            REAL upperavg = tl + hfrac(oro) * (tr - tl);
-            REAL loweravg = bl + hfrac(oro) * (br - bl);
-            REAL v1 = upperavg + vfrac(oro) * (loweravg - upperavg);
-
-            if (maxMoment.at<REAL>(row, col) > v1)
-            {
-                REAL x = col - xoff(oro);
-                REAL y = row + yoff(oro);
-
-                int fx = static_cast<int>(floor(x));
-                int cx = static_cast<int>(ceil(x));
-                int fy = static_cast<int>(floor(y));
-                int cy = static_cast<int>(ceil(y));
-
-                REAL tl = maxMoment.at<REAL>(fy, fx);
-                REAL tr = maxMoment.at<REAL>(fy, cx);
-                REAL bl = maxMoment.at<REAL>(cy, fx);
-                REAL br = maxMoment.at<REAL>(cy, cx);
-
-                REAL upperavg = tl + hfrac(oro) * (tr - tl);
-                REAL loweravg = bl + hfrac(oro) * (br - bl);
-                REAL v2 = upperavg + vfrac(oro) * (loweravg - upperavg);
-                if (maxMoment.at<REAL>(row, col) > v2)
-                {
-                    //if (maxMoment.at<REAL>(row, col) > 0.02)
-                    result.at<REAL>(row, col) = maxMoment.at<REAL>(row, col);
-                }
-            }
-        }
-    }
 
     maxMoment.convertTo(edges, CV_8U, 255);
 
-    //minMoment.convertTo(corners, CV_8U, 255);
-
-    //orientation.copyTo(corners);
-
-    //result.convertTo(corners, CV_8U, 255);
-
-
-    //поиск ключевых квадратов
-    cv::Rect roi_rect;
-
-    roi_rect.width = cell_size;
-    roi_rect.height = cell_size;
-    cv::Mat roi;
-    double min_val, max_val;
-    bool ori_presence[norient];
-    _feature.clear();
-
-    cv::minMaxIdx(pc[0], &min_val, &max_val);
-    for (int row = cell_size; row < height - cell_size; row += cell_size / 2)
-    {
-        roi_rect.y = row;
-        for (int col = cell_size; col < width - cell_size; col += cell_size / 2)
-        {
-            roi_rect.x = col;
-            for (int ori = 0; ori < norient; ++ori)
-            {
-
-                roi = pc[ori](roi_rect);
-                cv::minMaxIdx(roi, &min_val, &max_val);
-                if (max_val > edge_limit)
-                {
-                    ori_presence[ori] = true;
-                }
-                else
-                {
-                    ori_presence[ori] = false;
-                }
-            }
-            bool flag = false;
-            for (int ori = 0; ori < norient / 2; ++ori)
-            {
-                if (ori_presence[ori])
-                {
-                    for (int o = ori + norient / 4 + 1; o < ori + (norient * 2) / 3 - 1 && o < norient; ++o)
-                    {
-                        if (ori_presence[o])
-                        {
-                            //есть разноориентированные особенности
-                            _feature.push_back(roi_rect);
-                            //cv::rectangle(edges, cv::Point(col, row), cv::Point(col + cell_size, row + cell_size), 128);
-                            flag = true;
-                            break;
-                        }
-                    }
-                    if (flag) break;
-                }
-            }
-        }
-    }
-    //std::cout << _feature.size() << std::endl; 
+    minMoment.convertTo(corners, CV_8U, 255);
 }
 
 
