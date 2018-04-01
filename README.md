@@ -2,6 +2,9 @@
 
 An implemenation of phase congruency image features detection: edges and corners.
 
+Kovesi, P.D.: Image features from phase congruency. Videre: Journal of Computer Vision Research 1(1999)
+http://mitpress.mit.edu/e-journals/Videre/
+
 ![Example of features detection](/example/1.png)
 
 ![Example of features detection](/example/out.png)
@@ -18,8 +21,8 @@ Microsoft Visual Studio required.
 
 ## To use: ##
 
-    testPhase input_file_name.txt output_file_name.svg
+    testPhase input_file_name.png output_file_name.png
 
 for example:
 
-    testPhase resources/1.jpg example/1.jpg
+    testPhase example/1.png example/out.png
