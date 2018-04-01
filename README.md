@@ -5,9 +5,11 @@ An implemenation of phase congruency image features detection: edges and corners
 Kovesi, P.D.: Image features from phase congruency. Videre: Journal of Computer Vision Research 1(1999)
 http://mitpress.mit.edu/e-journals/Videre/
 
-![Example of features detection](/example/1.png)
+![Example image](/example/1.png)
 
-![Example of features detection](/example/out.png)
+![Example of edges detection](/example/edges.png)
+
+![Example of corners detection](/example/corners.png)
 
 ## To build: ##
 
