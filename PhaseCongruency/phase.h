@@ -1,20 +1,36 @@
 #pragma once
+#include <vector>
+#include <opencv2/core/types.hpp>
 
 namespace cv
 {
-	class Mat;
 	class _InputArray;
 	class _OutputArray;
     typedef const _InputArray& InputArray;
     typedef const _OutputArray& OutputArray;
 }
 
+struct PhaseCongruencyConst {
+    double sigma;
+    double mult = 2.0;
+    double minwavelength = 1.5;
+    double epsilon = 0.0002;
+    double cutOff = 0.4;
+    double g = 10.0;
+    double k = 10.0;
+    PhaseCongruencyConst();
+    PhaseCongruencyConst(const PhaseCongruencyConst& _pcc);
+    PhaseCongruencyConst& operator=(const PhaseCongruencyConst& _pcc);
+};
+
 class PhaseCongruency
 {
 public:
 	PhaseCongruency(cv::Size _img_size, size_t _nscale, size_t _norient);
 	~PhaseCongruency() {}
-	void calc(cv::InputArray _src);
+    void setConst(PhaseCongruencyConst _pcc);
+    void calc(cv::InputArray _src, std::vector<cv::Mat> &_pc);
+    void feature(std::vector<cv::Mat> &_pc, cv::OutputArray _edges, cv::OutputArray _corners);
     void feature(cv::InputArray _src, cv::OutputArray _edges, cv::OutputArray _corners);
 
 private:
@@ -22,15 +38,7 @@ private:
     size_t norient;
     size_t nscale;
 
-    const double sigma = -1.0 / (2.0 * log(0.65) * log(0.65));
+    PhaseCongruencyConst pcc;
 
-    const float mult = 2.0f;
-    const float minwavelength = 1.5f;
-    const double epsilon = 0.0002; //0.0001
-    const double cutOff = 0.4; //0.4;
-    const double g = 10.0; 
-    const double k = 10.0;
-
-    std::vector<cv::Mat>	filter;
-    std::vector<cv::Mat>        pc;
+    std::vector<cv::Mat> filter;
 };

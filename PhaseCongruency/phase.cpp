@@ -1,15 +1,11 @@
-
+#include "phase.h"
 
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
-
-#include "phase.h"
+#include <vector>
 
 #define _USE_MATH_DEFINES
 #include <math.h>
-
-
-#define CV_MINMAX       32
 
 using namespace cv;
 
@@ -97,15 +93,15 @@ PhaseCongruency::PhaseCongruency(Size _size, size_t _nscale, size_t _norient)
     double mt = 1.0f;
     for (int scale = 0; scale < nscale; scale++)
     {
-        const double wavelength = minwavelength * mt;
+        const double wavelength = pcc.minwavelength * mt;
         gabor[scale] = radius * wavelength;
         log(gabor[scale], gabor[scale]);
         pow(gabor[scale], 2.0, gabor[scale]);
-        gabor[scale] *= sigma;
+        gabor[scale] *= pcc.sigma;
         exp(gabor[scale], gabor[scale]);
         gabor[scale].at<double>(dft_M_2, dft_N_2) = 0.0;
         divide(gabor[scale], lp, gabor[scale]);
-        mt = mt * mult;
+        mt = mt * pcc.mult;
     }
     const double angle_const = static_cast<double>(M_PI) / static_cast<double>(norient);
     for (int ori = 0; ori < norient; ori++)
@@ -136,12 +132,17 @@ PhaseCongruency::PhaseCongruency(Size _size, size_t _nscale, size_t _norient)
     //Filter ready
 }
 
-void PhaseCongruency::calc(InputArray _src)
+void PhaseCongruency::setConst(PhaseCongruencyConst _pcc)
+{
+    pcc = _pcc;
+}
+
+void PhaseCongruency::calc(InputArray _src, std::vector<cv::Mat> &_pc)
 {
     Mat src = _src.getMat();
-    
+
     CV_Assert(src.size() == size);
- 
+
     const int width = size.width, height = size.height;
 
     Mat src64;
@@ -150,7 +151,7 @@ void PhaseCongruency::calc(InputArray _src)
     const int dft_M_r = getOptimalDFTSize(src.rows) - src.rows;
     const int dft_N_c = getOptimalDFTSize(src.cols) - src.cols;
 
-    pc.resize(norient);
+    _pc.resize(norient);
     std::vector<Mat> eo(nscale);
     Mat complex[2];
     Mat sumAn;
@@ -173,7 +174,7 @@ void PhaseCongruency::calc(InputArray _src)
     dft(dft_A, dft_A);            // this way the result may fit in the source matrix
 
     shiftDFT(dft_A, dft_A);
-    
+
     for (unsigned o = 0; o < norient; o++)
     {
         double noise = 0;
@@ -193,11 +194,11 @@ void PhaseCongruency::calc(InputArray _src)
                 //here to do noise threshold calculation
                 auto tau = mean(eo_mag);
                 tau.val[0] = tau.val[0] / sqrt(log(4.0));
-                auto mt = 1.0 * pow(mult, nscale);
-                auto totalTau = tau.val[0] * (1.0 - 1.0 / mt) / (1.0 - 1.0 / mult);
+                auto mt = 1.0 * pow(pcc.mult, nscale);
+                auto totalTau = tau.val[0] * (1.0 - 1.0 / mt) / (1.0 - 1.0 / pcc.mult);
                 auto m = totalTau * sqrt(M_PI / 2.0);
                 auto n = totalTau * sqrt((4 - M_PI) / 2.0);
-                noise = m + k * n;
+                noise = m + pcc.k * n;
                 //xnoise = 0;
                 //complex[0] -= xnoise;
                 //max(complex[0], 0.0, complex[0]);
@@ -219,7 +220,7 @@ void PhaseCongruency::calc(InputArray _src)
         } // next scale
 
         magnitude(sumRe, sumIm, xEnergy);
-        xEnergy += epsilon;
+        xEnergy += pcc.epsilon;
         divide(sumIm, xEnergy, sumIm);
         divide(sumRe, xEnergy, sumRe);
         energy.setTo(0);
@@ -248,37 +249,29 @@ void PhaseCongruency::calc(InputArray _src)
 
         energy -= Scalar::all(noise); // -noise
         max(energy, 0.0, energy);
-        maxAn += epsilon;
+        maxAn += pcc.epsilon;
 
         divide(sumAn, maxAn, tmp, -1.0 / static_cast<double>(nscale));
 
-        tmp += cutOff;
-        tmp = tmp * g;
+        tmp += pcc.cutOff;
+        tmp = tmp * pcc.g;
         exp(tmp, tmp);
         tmp += 1.0; // 1 / weight
 
         //PC
         multiply(tmp, sumAn, tmp);
-        divide(energy, tmp, pc[o]);
-        if (o == 5)
-        {
-            //imshow("orinetation", pc[o]);
-        }
+        divide(energy, tmp, _pc[o]);
     }//orientation
-
 }
 
 //Build up covariance data for every point
-void PhaseCongruency::feature(InputArray _src, cv::OutputArray _edges, cv::OutputArray _corners)
+void PhaseCongruency::feature(std::vector<cv::Mat>& _pc, cv::OutputArray _edges, cv::OutputArray _corners)
 {
-    
-    calc(_src);
-    
     _edges.create(size, CV_8UC1);
     _corners.create(size, CV_8UC1);
     auto edges = _edges.getMat();
     auto corners = _corners.getMat();
-    
+
     Mat covx2 = Mat::zeros(size, MAT_TYPE);
     Mat covy2 = Mat::zeros(size, MAT_TYPE);
     Mat covxy = Mat::zeros(size, MAT_TYPE);
@@ -289,8 +282,8 @@ void PhaseCongruency::feature(InputArray _src, cv::OutputArray _edges, cv::Outpu
     for (unsigned o = 0; o < norient; o++)
     {
         auto angl = static_cast<double>(o) * angle_const;
-        cos_pc = pc[o] * cos(angl);
-        sin_pc = pc[o] * sin(angl);
+        cos_pc = _pc[o] * cos(angl);
+        sin_pc = _pc[o] * sin(angl);
         multiply(cos_pc, sin_pc, mul_pc);
         add(covxy, mul_pc, covxy);
         pow(cos_pc, 2, cos_pc);
@@ -320,4 +313,42 @@ void PhaseCongruency::feature(InputArray _src, cv::OutputArray _edges, cv::Outpu
     minMoment.convertTo(corners, CV_8U, 255);
 }
 
+//Build up covariance data for every point
+void PhaseCongruency::feature(InputArray _src, cv::OutputArray _edges, cv::OutputArray _corners)
+{
+    std::vector<cv::Mat> pc;
+    calc(_src, pc);
+    feature(pc, _edges, _corners);
+}
 
+PhaseCongruencyConst::PhaseCongruencyConst()
+{
+    sigma = -1.0 / (2.0 * log(0.65) * log(0.65));
+}
+
+PhaseCongruencyConst::PhaseCongruencyConst(const PhaseCongruencyConst & _pcc)
+{
+    sigma = _pcc.sigma;
+    mult = _pcc.mult;
+    minwavelength = _pcc.minwavelength;
+    epsilon = _pcc.epsilon;
+    cutOff = _pcc.cutOff;
+    g = _pcc.g;
+    k = _pcc.k;
+}
+
+PhaseCongruencyConst& PhaseCongruencyConst::operator=(const PhaseCongruencyConst & _pcc)
+{
+    if (this == &_pcc) {
+        return *this;
+    }
+    sigma = _pcc.sigma;
+    mult = _pcc.mult;
+    minwavelength = _pcc.minwavelength;
+    epsilon = _pcc.epsilon;
+    cutOff = _pcc.cutOff;
+    g = _pcc.g;
+    k = _pcc.k;
+
+    return *this;
+}
