@@ -35,7 +35,7 @@ private:
     const int cell_size = CELL_SIZE;
     const double thin_radius = 1.5;
 
-    cv::Mat	filter[2][nscale][norient];
+    cv::Mat	filter[nscale][norient];
     cv::Mat mask[norient];
     cv::Mat pc[norient];
 
@@ -44,7 +44,7 @@ private:
 
 
     cv::Mat eo[nscale][norient];
-    cv::Mat pct[2];
+
 
     cv::Mat sumAn;
     cv::Mat sumRe;
