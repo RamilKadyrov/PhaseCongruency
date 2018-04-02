@@ -1,6 +1,6 @@
 # Phase congruency #
 
-An implemenation of phase congruency image features detection: edges and corners.
+An implementation of phase congruency image features detection: edges and corners.
 
 Kovesi, P.D.: Image features from phase congruency. Videre: Journal of Computer Vision Research 1(1999)
 http://mitpress.mit.edu/e-journals/Videre/
